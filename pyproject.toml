@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hisstrace"
+version = "2026.10.27"
+description = "Programmable syscall interception and fault injection in Python. strace, with fangs."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Aivars Kalvans", email = "aivars.kalvans@gmail.com" }]
+keywords = ["ptrace", "strace", "tracing", "syscall", "debugger"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Monitoring",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/aivarsk/hisstrace"
+
+[project.scripts]
+hisstrace = "hisstrace.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["hisstrace"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+show_error_codes = true
+check_untyped_defs = true
+
+[tool.ruff]
+line-length = 120
