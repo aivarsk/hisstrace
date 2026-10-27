@@ -36,6 +36,7 @@
     @keyframes slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     .grid { display: grid; grid-template-columns: 1fr; border-bottom: 1px solid var(--line); }
     .cell { padding: 56px 32px; border-top: 1px solid var(--line); }
+    .cell > * { max-width: 1056px; margin-inline: auto; }  /* same column as .g: 1120 incl. its 2x32 padding */
     .cell:first-child { border-top: none; }
     .cell.wide { border-right: none; }
     h2 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 18px; }
