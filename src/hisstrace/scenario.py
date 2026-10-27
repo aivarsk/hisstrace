@@ -71,9 +71,33 @@ class _Match:
 class Call(_Match):
     """A pre-call match: the tracee is stopped at syscall entry."""
 
-    def __init__(self, pid, name, args, data=None, tid=None):
+    def __init__(self, pid, name, args, data=None, tid=None, number=0):
         super().__init__(pid, name, args, tid)
         self.data = data
+        self._number = number  # for run() to sync overwrites into pending
+        self._new_args = None
+
+    def overwrite(self, **args):
+        """Rewrite arguments before the kernel runs the call, by name.
+
+        The tracee is stopped at entry; values land in the argument
+        registers, this match's args view is refreshed, and the pending
+        entry is updated so the matching post-match sees the new values.
+        """
+        arch = current()
+        names = arg_names(self.name)
+        for key in args:
+            if key not in names:
+                raise ValueError(f"{self.name}() has no argument {key!r}")
+        regs = arch.get(self.tid)
+        raw = list(self.args.raw)
+        for key, value in args.items():
+            index = names.index(key)
+            arch.set_arg(regs, index, value)
+            raw[index] = value
+        arch.set(self.tid, regs)
+        self.args = Args(names, raw)
+        self._new_args = tuple(raw)
 
     def __repr__(self):
         return f"Call({self.name}, {self.args!r})"
@@ -224,18 +248,23 @@ def _dispatch(branches, event, pending):
     if isinstance(event, Child):
         return event if any(branch.phase == "child" for branch in branches) else None
     if event.entry:
-        # record matching exits first: an entry-phase branch below may
-        # consume this event, and the exit-phase branch still needs the
-        # entry in `pending` to correlate the matching exit stop later
-        for branch in branches:
-            if branch.phase == "exit" and branch.matches(event):
-                pending[(event.number, event.tid)] = event
+        # record every consumed entry: a later await may be the exit-phase
+        # branch of this same call (pre-then-post alternation), and its exit
+        # can only correlate through pending
+        if any(branch.phase != "child" and branch.matches(event) for branch in branches):
+            pending[(event.number, event.tid)] = event
     for branch in branches:
         if branch.phase == "child":
             continue
         if branch.phase == "entry":
             if event.entry and branch.matches(event):
-                call = Call(event.pid, event.name, Args(arg_names(event.name), event.args), tid=event.tid)
+                call = Call(
+                    event.pid,
+                    event.name,
+                    Args(arg_names(event.name), event.args),
+                    tid=event.tid,
+                    number=event.number,
+                )
                 call.data = _snapshot(event.tid, event.name, event.args)
                 return call
         elif not event.entry:
@@ -287,6 +316,10 @@ def run(scenario, argv=None, pid=None):
                     tracer.drop_child(event.pid)  # nobody asked: let it run free
                 continue
             matcher = _resume(coro, result)
+            if isinstance(result, Call) and result._new_args is not None:
+                entry = pending.get((result._number, result.tid))
+                if entry is not None:
+                    entry.args = result._new_args  # overwrite() reached the post-match too
             if isinstance(result, Child):  # the scenario decided during the resume
                 if result.followed:
                     tracer.follow_child(result.pid)

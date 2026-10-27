@@ -131,7 +131,7 @@ Server: cloudflare
         <span class="k">if</span> event.name == <span class="c">"close"</span>:
             <span class="k">break</span>
         <span class="k">print</span>(event.name, event.data)</div>
-    <p style="max-width:60em">Matchers take argument filters; <span class="mono" style="color:var(--ink)">any_of</span> resumes on whichever comes first. Threads are always traced; child processes opt in through <span class="mono" style="color:var(--ink)">await on.fork()</span> and <span class="mono" style="color:var(--ink)">child.follow()</span>. And the fangs: software breakpoints inside the tracee, stopped threads, live registers, memory reads.</p>
+    <p style="max-width:60em">Matchers take argument filters; <span class="mono" style="color:var(--ink)">any_of</span> resumes on whichever comes first. Threads are always traced; child processes opt in through <span class="mono" style="color:var(--ink)">await on.fork()</span> and <span class="mono" style="color:var(--ink)">child.follow()</span>. And the fangs: software breakpoints with live registers, memory reads, and argument mutation at entry.</p>
     <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> ptrace, tracer
 
 t = tracer()
@@ -139,8 +139,11 @@ addr = symbol_addr(t.pid, <span class="c">"crypto/ecdh.x25519ScalarMult"</span>)
 t.set_breakpoint(addr)   <span class="c"># one int3; the step and re-arm are handled</span>
 
 trap = <span class="k">await</span> next_trap()       <span class="c"># arrives like any other event</span>
-secret = ptrace.peek(trap.tid, trap.regs.rdi, 32)  <span class="c"># scalars in registers</span></div>
-    <p><small style="color:var(--gray)">That is exactly how <span class="mono" style="color:var(--ink)">examples/ssh_decrypted.py</span> recovers an SSH session key from a running Go binary. Next commits: fail(), succeed(), replace_with().</small></p>
+secret = ptrace.peek(trap.tid, trap.regs.rdi, 32)  <span class="c"># scalars in registers</span>
+
+call = <span class="k">await</span> pre.read(fd=fd)
+call.overwrite(count=1)  <span class="c"># the kernel is asked for one byte</span></div>
+    <p><small style="color:var(--gray)">That is exactly how <span class="mono" style="color:var(--ink)">examples/ssh_decrypted.py</span> recovers an SSH session key and <span class="mono" style="color:var(--ink)">examples/byte_by_byte.py</span> slows a whole HTTP conversation to one byte per syscall. Next commits: fail(), succeed(), replace_with().</small></p>
   </div>
 
   <div class="cell wide">

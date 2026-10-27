@@ -30,6 +30,10 @@ pip install hisstrace
 - software breakpoints inside the tracee: `Tracer.set_breakpoint(addr)` arms
   an int3, the stop surfaces as a `Trap` event with live registers, and the
   original instruction is single-stepped and re-armed for you;
+- argument mutation at entry: on a pre-match, `call.overwrite(count=1)`
+  rewrites named argument registers before the kernel runs the call (names
+  come from the syscall table), and the matching post-match sees the new
+  values;
 - `hisstrace run CMD [ARGS...]`: a strace-style printer, built from the
   scenario API like everything else.
 
@@ -60,6 +64,11 @@ hisstrace scenario examples/capture.py -- python3 -c "..."
 `examples/httpforever.py` prints curl's entire HTTP conversation with
 httpforever.com, request bytes marked `->` and response bytes `<-`, by
 finding the TCP socket on port 80 and watching `sendto`/`recvfrom` on it.
+`examples/byte_by_byte.py` takes the idea one step further: it rewrites the
+size argument of every socket read and write to 1 (`call.overwrite` for
+count-style calls, one poke inside the msghdr for `recvmsg`/`sendmsg`), so
+the kernel moves the whole conversation one byte per syscall, and it tracks
+happy-eyeballs connection churn, forked transfers, and fd reuse to do it.
 `examples/watch_conn.py` traces a full SSH round of a Go client (socket
 traffic across its thread handoff plus every getrandom, ending when the
 connection closes); `examples/ssh_handshake.py` parses that same traffic into
@@ -135,11 +144,13 @@ the fallback for anything missing, and are also usable as match filters, as
 
 ## Honest limits
 
-One scenario runs at a time, serially. No `call.fail()`, argument mutation, or
-return-value replacement yet; the scenario can observe and patch memory but
-not yet rewrite a syscall's outcome. No fd-lifetime tracking: `dup2` aliasing
-and fd reuse after close are invisible to plain `fd=` filters. Attaching to
-another user's process fails with the kernel's `ptrace_scope` error.
+One scenario runs at a time, serially. Argument mutation at entry works via
+`call.overwrite()`, but there is no `call.fail()` or return-value replacement
+yet; the scenario can rewrite what a call asks for, not what the kernel
+answers with. No fd-lifetime tracking: `dup2` aliasing and fd reuse after
+close are invisible to plain `fd=` filters (scenarios track fds themselves,
+as `examples/byte_by_byte.py` does). Attaching to another user's process
+fails with the kernel's `ptrace_scope` error.
 
 ## Develop
 

@@ -143,6 +143,60 @@ class ScenarioRunTest(unittest.TestCase):
         self.assertEqual(len(exits), 2)
         self.assertEqual([e.retval for e in exits], [1000, 1000])
 
+    def test_alternating_pre_then_post_collects_exits(self):
+        # awaiting pre.read then post.read for the same in-flight call must
+        # still deliver the exit: the entry is consumed by the pre-branch, so
+        # the dispatcher must have recorded it for the post-branch
+        with tempfile.NamedTemporaryFile("wb", delete=False) as f:
+            f.write(b"y" * 1500)
+            path = f.name
+        self.addCleanup(os.unlink, path)
+        got = []
+
+        async def scenario():
+            fd = None
+            while fd is None:  # pointer filters compare raw values; match the string
+                opened = await post.openat()
+                if opened.string("path") == path:
+                    fd = opened.retval
+            for _ in range(2):
+                await pre.read(fd=fd, count=750)
+                got.append(await post.read(fd=fd))
+            await pre.close(fd=fd)
+
+        child = f"import os; fd = os.open({path!r}, os.O_RDONLY); os.read(fd, 750); os.read(fd, 750)"
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual([e.retval for e in got], [750, 750])
+        self.assertTrue(all(e.data == b"y" * 750 for e in got))
+
+    def test_overwrite_shrinks_the_next_call(self):
+        # overwrite on a pre-match rewrites argument registers before the
+        # kernel runs the call; the post-match sees the shrunk request
+        with tempfile.NamedTemporaryFile("wb", delete=False) as f:
+            f.write(b"z" * 100)
+            path = f.name
+        self.addCleanup(os.unlink, path)
+        got = []
+
+        async def scenario():
+            fd = None
+            while fd is None:
+                opened = await post.openat()
+                if opened.string("path") == path:
+                    fd = opened.retval
+            call = await pre.read(fd=fd, count=100)
+            call.overwrite(count=1)
+            got.append(await post.read(fd=fd))
+            await pre.close(fd=fd)
+
+        child = f"import os; fd = os.open({path!r}, os.O_RDONLY); os.read(fd, 100)"
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual(got[0].retval, 1)
+        self.assertEqual(got[0].data, b"z")
+        self.assertEqual(got[0].args.count, 1)  # the match view is refreshed
+
 
 class AnyOfTest(unittest.TestCase):
     def test_requires_matchers(self):
