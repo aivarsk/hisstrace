@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>hisstrace - strace, with fangs</title>
+  <meta name="description" content="Programmable syscall interception and fault injection in Python. Pure stdlib ptrace bindings for x86-64 and AArch64.">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg: #0D1117; --panel: #12181F; --ink: #E6EDF3; --gray: #8B949E; --line: #21262D; --venom: #A3E635; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 16px; line-height: 1.7; }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .g { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+    .status { border-bottom: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--gray); }
+    .status .g { display: flex; justify-content: space-between; padding-top: 10px; padding-bottom: 10px; }
+    .status b { color: var(--venom); font-weight: 400; }
+    .nav { border-bottom: 1px solid var(--line); }
+    .nav .g { display: flex; align-items: baseline; gap: 28px; padding-top: 20px; padding-bottom: 20px; }
+    .nav .wordmark { font-weight: 700; font-size: 20px; letter-spacing: -.02em; margin-right: auto; }
+    .nav .wordmark i { font-style: normal; color: var(--venom); }
+    .nav a { color: var(--gray); text-decoration: none; font-size: 14px; }
+    .nav a:hover { color: var(--venom); }
+    .hero { border-bottom: 1px solid var(--line); padding: 72px 0 56px; position: relative; overflow: hidden; }
+    h1 { font-size: clamp(56px, 10vw, 128px); font-weight: 700; letter-spacing: -.045em; line-height: .92; margin: 0 0 8px; }
+    h1 .hiss { color: var(--venom); }
+    .sub { color: var(--gray); font-size: clamp(16px, 2vw, 20px); max-width: 30em; margin: 22px 0 34px; }
+    .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+    .install { background: var(--venom); color: #0D1117; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; padding: 14px 22px; border-radius: 6px; position: relative; }
+    .install .dollar { opacity: .55; }
+    .copy { position: absolute; top: -10px; right: -10px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--gray); font-size: 11px; cursor: pointer; font-family: 'JetBrains Mono', monospace; }
+    .copy:hover { color: var(--venom); border-color: var(--venom); }
+    .pill { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--gray); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; }
+    .ticker { border-bottom: 1px solid var(--line); background: #090C10; overflow: hidden; white-space: nowrap; }
+    .ticker pre { display: inline-block; padding: 10px 0; margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3D444D; animation: slide 60s linear infinite; }
+    @keyframes slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    .grid { display: grid; grid-template-columns: 1fr; border-bottom: 1px solid var(--line); }
+    .cell { padding: 56px 32px; border-top: 1px solid var(--line); }
+    .cell:first-child { border-top: none; }
+    .cell.wide { border-right: none; }
+    h2 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 18px; }
+    h2 .no { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--venom); vertical-align: 8px; margin-right: 10px; }
+    p { color: #B7C0CA; margin: 0 0 14px; max-width: 34em; }
+    .code { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.65; color: var(--ink); margin: 18px 0; position: relative; white-space: pre; }
+    .code .k { color: var(--venom); } .code .c { color: var(--gray); font-style: italic; }
+    .term { background: #090C10; border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 13px; margin: 14px 0; color: var(--gray); white-space: pre; overflow-x: auto; }
+    .term .out { color: var(--venom); }
+    ul { padding-left: 20px; margin: 0; } li { color: #B7C0CA; margin-bottom: 10px; max-width: 32em; }
+    footer { padding: 30px 0 50px; color: var(--gray); font-size: 13.5px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    footer a { color: var(--gray); } footer a:hover { color: var(--venom); }
+    footer .motto { font-family: 'JetBrains Mono', monospace; font-style: italic; }
+    @media (max-width: 860px) { .cell { padding: 40px 28px; } }
+  </style>
+</head>
+<body>
+
+<div class="status"><div class="g"><span>HISSTRACE/1 &middot; PID <b>4242</b> &middot; ATTACHED</span><span>x86-64 + aarch64 &middot; stdlib only &middot; MIT</span></div></div>
+
+<div class="nav"><div class="g">
+  <span class="wordmark"><i>hiss</i>trace</span>
+  <a href="https://github.com/aivarsk/hisstrace">github</a>
+</div></div>
+
+<div class="ticker"><pre>openat(-100, 0x7ffc9d2b, 0x82400, 0) = 4   read(4, 0x7ffc9c1, 832, 0) = 832   mmap(0, 0x220d90, 1, 2050, 4, 0) = 0x7f31a4c0   socket(2, 1, 0) = 5   connect(5, 0x7ffc99a, 16) = -1 ECONNREFUSED   close(5) = 0   openat(-100, 0x7ffc8e4, 0x92400, 0) = 5   read(5, 0x7ffc912, 4096, 0) = 1871   write(1, 0x55d1fe0, 42, 0) = 42   exit_group(0) = ?   openat(-100, 0x7ffc9d2b, 0x82400, 0) = 4   read(4, 0x7ffc9c1, 832, 0) = 832   mmap(0, 0x220d90, 1, 2050, 4, 0) = 0x7f31a4c0   socket(2, 1, 0) = 5   connect(5, 0x7ffc99a, 16) = -1 ECONNREFUSED   close(5) = 0   openat(-100, 0x7ffc8e4, 0x92400, 0) = 5   read(5, 0x7ffc912, 4096, 0) = 1871   write(1, 0x55d1fe0, 42, 0) = 42   exit_group(0) = ?   </pre></div>
+
+<div class="hero"><div class="g">
+  <h1><span class="hiss">hiss</span>trace</h1>
+  <p class="sub">Programmable syscall interception and fault injection in Python. <span class="mono" style="color:var(--venom)">strace, with fangs.</span></p>
+  <div class="row">
+    <div class="install"><button class="copy" title="copy">c</button><span class="dollar">$</span> pip install hisstrace</div>
+    <span class="pill">no C extensions</span><span class="pill">no dependencies</span><span class="pill">threads &middot; attach &middot; -p PID</span>
+  </div>
+</div></div>
+
+<div class="grid"><div class="g" style="padding:0; display:contents">
+
+  <div class="cell">
+    <h2><span class="no">01</span>The happy path is the tested path</h2>
+    <p>Every service has error handling. Almost none of it is tested. The retry logic, the timeout branch, the "what if the disk is full" path: written once, exercised never, discovered in production. <span class="mono" style="color:var(--ink)">strace --inject</span> covers the one-liners. Real faults have state: only this host, only after the first success, only while the flag file is absent. That needs a programming language, not a longer expression.</p>
+    <p>Hisstrace is a Python coroutine that waits for the syscall you care about and decides. Local variables are your state, if statements are your predicates, the order of the awaits is the order of the story.</p>
+  </div>
+
+  <div class="cell">
+    <h2><span class="no">02</span>How it works</h2>
+    <p>Write <span class="mono" style="color:var(--ink)">scenario.py</span> as an <span class="mono" style="color:var(--ink)">async def scenario()</span>. Run it against a command, or attach with <span class="mono" style="color:var(--ink)">-p PID</span>. While your Python runs between awaits, the matched tracee stays stopped; the next await resumes it. Unmatched syscalls pass through unchanged. This is <span class="mono" style="color:var(--ink)">examples/httpforever.py</span>, slightly trimmed:</p>
+    <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> any_of, post, pre, ptrace
+
+<span class="k">async def</span> scenario():
+    call = <span class="k">await</span> pre.connect()        <span class="c"># curl probes unix sockets first</span>
+    raw = ptrace.peek(call.tid, call.args.addr, 4)  <span class="c"># sockaddr: port is big-endian</span>
+    <span class="k">if</span> int.from_bytes(raw[2:4], <span class="c">"big"</span>) != 80:
+        <span class="k">return</span>                   <span class="c"># not the HTTP connection</span>
+    fd = call.args.fd
+
+    <span class="k">while True</span>:
+        event = <span class="k">await</span> any_of(pre.sendto(fd=fd), post.recvfrom(fd=fd), post.close(fd=fd))
+        <span class="k">if</span> event.name == <span class="c">"close"</span>:
+            <span class="k">break</span>
+        <span class="k">if</span> event.data:
+            arrow = <span class="c">"-&gt;"</span> <span class="k">if</span> event.name == <span class="c">"sendto"</span> <span class="k">else</span> <span class="c">"&lt;-"</span>
+            <span class="k">print</span>(arrow, event.data.decode(errors=<span class="c">"replace"</span>), end=<span class="c">""</span>)</div>
+    <div class="term"><span style="color:#3D444D">$</span> hisstrace scenario examples/httpforever.py -- curl -s http://httpforever.com/
+<span class="out">-&gt; GET / HTTP/1.1
+Host: httpforever.com
+User-Agent: curl/8.18.0
+Accept: */*
+
+&lt;- HTTP/1.1 200 OK
+Content-Type: text/html
+Transfer-Encoding: chunked
+Server: cloudflare
+...
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+...</span></div>
+  </div>
+
+  <div class="cell wide">
+    <h2><span class="no">03</span>A scenario is a handful of lines</h2>
+    <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> any_of, post, pre
+
+<span class="k">async def</span> scenario():
+    opened = <span class="k">await</span> post.openat(flags=os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    <span class="k">if</span> opened.failed:
+        <span class="k">return</span>
+    fd = opened.retval
+
+    <span class="k">while True</span>:
+        event = <span class="k">await</span> any_of(post.read(fd=fd), pre.write(fd=fd), pre.close(fd=fd))
+        <span class="k">if</span> event.name == <span class="c">"close"</span>:
+            <span class="k">break</span>
+        <span class="k">print</span>(event.name, event.data)</div>
+    <p style="max-width:60em">Matchers take argument filters; <span class="mono" style="color:var(--ink)">any_of</span> resumes on whichever comes first. Threads are always traced; child processes opt in through <span class="mono" style="color:var(--ink)">await on.fork()</span> and <span class="mono" style="color:var(--ink)">child.follow()</span>. And the fangs: software breakpoints inside the tracee, stopped threads, live registers, memory reads.</p>
+    <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> ptrace, tracer
+
+t = tracer()
+addr = symbol_addr(t.pid, <span class="c">"crypto/ecdh.x25519ScalarMult"</span>)
+t.set_breakpoint(addr)   <span class="c"># one int3; the step and re-arm are handled</span>
+
+trap = <span class="k">await</span> next_trap()       <span class="c"># arrives like any other event</span>
+secret = ptrace.peek(trap.tid, trap.regs.rdi, 32)  <span class="c"># scalars in registers</span></div>
+    <p><small style="color:var(--gray)">That is exactly how <span class="mono" style="color:var(--ink)">examples/ssh_decrypted.py</span> recovers an SSH session key from a running Go binary. Next commits: fail(), succeed(), replace_with().</small></p>
+  </div>
+
+  <div class="cell wide">
+    <h2><span class="no">04</span>Small on purpose</h2>
+    <ul>
+      <li>ptrace(2) through ctypes. No C build step, nothing to compile, nothing to pin. Syscall tables for x86-64 and AArch64, generated from kernel headers.</li>
+      <li>Attach with <span class="mono" style="color:var(--ink)">hisstrace run -p PID</span>: every thread, clean detach, threads spawned after the attach are picked up.</li>
+      <li>Honest limits: one scenario runs serially; attach needs the permission your kernel's ptrace rules grant; fd-lifetime tracking (dup2 aliasing, fd reuse) is still ahead. A narrow tool done deep, not a wide one done halfway.</li>
+    </ul>
+  </div>
+
+</div></div>
+
+<div class="g"><footer>
+  <span>hisstrace.io &middot; <a href="https://github.com/aivarsk/hisstrace">github</a> &middot; MIT</span>
+  <span class="motto">strace, with fangs.</span>
+</footer></div>
+
+<script>
+document.querySelectorAll(".code, .install").forEach((el) => {
+  const btn = el.querySelector(".copy");
+  if (!btn) return;
+  const text = el.textContent.replace(/^[c ]*/, "").replace("$", "").trim();
+  btn.onclick = async () => {
+    try { await navigator.clipboard.writeText(text); btn.textContent = "\u2713"; }
+    catch (e) { btn.textContent = "!"; }
+    setTimeout(() => { btn.textContent = "c"; }, 1200);
+  };
+});
+</script>
+</body>
+</html>
