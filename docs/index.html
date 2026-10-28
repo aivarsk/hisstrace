@@ -9,6 +9,7 @@
   <style>
     :root { --bg: #0D1117; --panel: #12181F; --ink: #E6EDF3; --gray: #8B949E; --line: #21262D; --venom: #A3E635; }
     * { box-sizing: border-box; }
+    html, body { overflow-x: clip; }  /* the ticker and pre blocks stay inside */
     body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 16px; line-height: 1.7; }
     .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
     .g { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
@@ -35,7 +36,7 @@
     .ticker pre { display: inline-block; padding: 10px 0; margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3D444D; animation: slide 60s linear infinite; }
     @keyframes slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     .grid { display: grid; grid-template-columns: 1fr; border-bottom: 1px solid var(--line); }
-    .cell { padding: 56px 32px; border-top: 1px solid var(--line); }
+    .cell { padding: 56px 32px; border-top: 1px solid var(--line); min-width: 0; }  /* grid items would else refuse to shrink below a long code line */
     .cell > * { max-width: 1056px; margin-inline: auto; }  /* same column as .g: 1120 incl. its 2x32 padding */
     .cell:first-child { border-top: none; }
     .cell.wide { border-right: none; }
@@ -50,7 +51,13 @@
     footer { padding: 30px 0 50px; color: var(--gray); font-size: 13.5px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
     footer a { color: var(--gray); } footer a:hover { color: var(--venom); }
     footer .motto { font-family: 'JetBrains Mono', monospace; font-style: italic; }
-    @media (max-width: 860px) { .cell { padding: 40px 28px; } }
+    @media (max-width: 860px) {
+      .g { padding: 0 20px; }
+      .cell { padding: 40px 20px; }
+      h1 { font-size: clamp(44px, 14vw, 56px); }
+      .status .g { flex-wrap: wrap; gap: 4px 16px; }
+      .hero { padding: 48px 0 40px; }
+    }
   </style>
 </head>
 <body>
