@@ -50,6 +50,8 @@
     ul { padding-left: 20px; margin: 0; } li { color: #B7C0CA; margin-bottom: 10px; max-width: 32em; }
     footer { padding: 30px 0 50px; color: var(--gray); font-size: 13.5px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
     footer a { color: var(--gray); } footer a:hover { color: var(--venom); }
+    a.code-link { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); }
+    a.code-link:hover { color: var(--venom); border-bottom-color: var(--venom); }
     footer .motto { font-family: 'JetBrains Mono', monospace; font-style: italic; }
     @media (max-width: 860px) {
       .g { padding: 0 20px; }
@@ -90,7 +92,7 @@
 
   <div class="cell">
     <h2><span class="no">02</span>How it works</h2>
-    <p>Write <span class="mono" style="color:var(--ink)">scenario.py</span> as an <span class="mono" style="color:var(--ink)">async def scenario()</span>. Run it against a command, or attach with <span class="mono" style="color:var(--ink)">-p PID</span>. While your Python runs between awaits, the matched tracee stays stopped; the next await resumes it. Unmatched syscalls pass through unchanged. <span class="mono" style="color:var(--ink)">hisstrace run CMD</span> is the same machinery printing everything, the strace-style first look when you are still poking around; a scenario is for when you know what you are looking for. This is <span class="mono" style="color:var(--ink)">examples/httpforever.py</span>, slightly trimmed:</p>
+    <p>Write <span class="mono" style="color:var(--ink)">scenario.py</span> as an <span class="mono" style="color:var(--ink)">async def scenario()</span>. Run it against a command, or attach with <span class="mono" style="color:var(--ink)">-p PID</span>. While your Python runs between awaits, the matched tracee stays stopped; the next await resumes it. Unmatched syscalls pass through unchanged. <span class="mono" style="color:var(--ink)">hisstrace run CMD</span> is the same machinery printing everything, the strace-style first look when you are still poking around; a scenario is for when you know what you are looking for. This is <a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/httpforever.py">examples/httpforever.py</a>, slightly trimmed:</p>
     <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> any_of, post, pre, ptrace
 
 <span class="k">async def</span> scenario():
@@ -150,24 +152,24 @@ secret = ptrace.peek(trap.tid, trap.regs.rdi, 32)  <span class="c"># scalars in 
 
 call = <span class="k">await</span> pre.read(fd=fd)
 call.overwrite(count=1)  <span class="c"># the kernel is asked for one byte</span></div>
-    <p><small style="color:var(--gray)">That is exactly how <span class="mono" style="color:var(--ink)">examples/ssh_decrypted.py</span> recovers an SSH session key and <span class="mono" style="color:var(--ink)">examples/byte_by_byte.py</span> slows a whole HTTP conversation to one byte per syscall. Entry rewriting ships: <span class="mono" style="color:var(--ink)">overwrite</span>, <span class="mono" style="color:var(--ink)">fail</span>, <span class="mono" style="color:var(--ink)">succeed</span>.</small></p>
+    <p><small style="color:var(--gray)">That is exactly how <a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/ssh_decrypted.py">examples/ssh_decrypted.py</a> recovers an SSH session key and <a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/byte_by_byte.py">examples/byte_by_byte.py</a> slows a whole HTTP conversation to one byte per syscall. Entry rewriting ships: <span class="mono" style="color:var(--ink)">overwrite</span>, <span class="mono" style="color:var(--ink)">fail</span>, <span class="mono" style="color:var(--ink)">succeed</span>.</small></p>
   </div>
 
   <div class="cell wide">
     <h2><span class="no">04</span>Examples included</h2>
     <ul>
-      <li><span class="mono" style="color:var(--ink)">strace.py</span> - the <span class="mono" style="color:var(--ink)">hisstrace run</span> printer as a scenario: every syscall, named args, results, the strace-style exit line. Copy it and bend the formatting.</li>
-      <li><span class="mono" style="color:var(--ink)">capture.py</span> - first steps: intercept one write, print its buffer.</li>
-      <li><span class="mono" style="color:var(--ink)">trackfd.py</span> - follow an fd from open to close, dump its traffic.</li>
-      <li><span class="mono" style="color:var(--ink)">httpforever.py</span> - print curl's entire HTTP conversation with httpforever.com.</li>
-      <li><span class="mono" style="color:var(--ink)">byte_by_byte.py</span> - <span class="mono" style="color:var(--ink)">overwrite()</span> every socket read and write to 1 byte; the whole page moves one byte per syscall.</li>
-      <li><span class="mono" style="color:var(--ink)">socket_audit.py</span> - linter for a classic event-loop bug: warn about any socket that lives its whole life blocking.</li>
-      <li><span class="mono" style="color:var(--ink)">nologin_audit.py</span> - is <span class="mono" style="color:var(--ink)">/usr/sbin/nologin</span> really nologin? Syscall whitelist, terminal/exec checks, fail-fast mode.</li>
-      <li><span class="mono" style="color:var(--ink)">watch_conn.py</span> - one SSH round of a Go client: socket traffic across its thread handoff, every getrandom.</li>
-      <li><span class="mono" style="color:var(--ink)">ssh_decrypted.py</span> - breakpoint inside the process, recover the X25519 secret from trap registers, decrypt the session.</li>
-      <li><span class="mono" style="color:var(--ink)">ssh_rng_via_syscall.py</span> - the same decryption with no symbols and no breakpoints: a one-byte patch forces getrandom onto the syscall path, the KEX scalar is picked out of the stream.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/strace.py">strace.py</a> - the <span class="mono" style="color:var(--ink)">hisstrace run</span> printer as a scenario: every syscall, named args, results, the strace-style exit line. Copy it and bend the formatting.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/capture.py">capture.py</a> - first steps: intercept one write, print its buffer.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/trackfd.py">trackfd.py</a> - follow an fd from open to close, dump its traffic.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/httpforever.py">httpforever.py</a> - print curl's entire HTTP conversation with httpforever.com.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/byte_by_byte.py">byte_by_byte.py</a> - <span class="mono" style="color:var(--ink)">overwrite()</span> every socket read and write to 1 byte; the whole page moves one byte per syscall.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/socket_audit.py">socket_audit.py</a> - linter for a classic event-loop bug: warn about any socket that lives its whole life blocking.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/nologin_audit.py">nologin_audit.py</a> - is <span class="mono" style="color:var(--ink)">/usr/sbin/nologin</span> really nologin? Syscall whitelist, terminal/exec checks, fail-fast mode.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/watch_conn.py">watch_conn.py</a> - one SSH round of a Go client: socket traffic across its thread handoff, every getrandom.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/ssh_decrypted.py">ssh_decrypted.py</a> - breakpoint inside the process, recover the X25519 secret from trap registers, decrypt the session.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/ssh_rng_via_syscall.py">ssh_rng_via_syscall.py</a> - the same decryption with no symbols and no breakpoints: a one-byte patch forces getrandom onto the syscall path, the KEX scalar is picked out of the stream.</li>
     </ul>
-    <p style="margin-top:14px"><small style="color:var(--gray)">The SSH set needs a Go client to watch; <span class="mono" style="color:var(--ink)">ssh_rng_via_syscall.py</span> also needs <span class="mono" style="color:var(--ink)">pip install cryptography</span>. Everything else runs against the usual suspects: curl, wget, python3, /usr/sbin/nologin.</small></p>
+    <p style="margin-top:14px"><small style="color:var(--gray)">The SSH set needs a Go client to watch; <a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/ssh_rng_via_syscall.py">ssh_rng_via_syscall.py</a> also needs <span class="mono" style="color:var(--ink)">pip install cryptography</span>. Everything else runs against the usual suspects: curl, wget, python3, /usr/sbin/nologin.</small></p>
   </div>
 
   <div class="cell wide">
