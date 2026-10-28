@@ -197,6 +197,109 @@ class ScenarioRunTest(unittest.TestCase):
         self.assertEqual(got[0].data, b"z")
         self.assertEqual(got[0].args.count, 1)  # the match view is refreshed
 
+    def test_fail_returns_errno_to_the_scenario(self):
+        with tempfile.NamedTemporaryFile("wb", delete=False) as f:
+            f.write(b"q" * 50)
+            path = f.name
+        self.addCleanup(os.unlink, path)
+        got = []
+
+        async def scenario():
+            fd = None
+            while fd is None:
+                opened = await post.openat()
+                if opened.string("path") == path:
+                    fd = opened.retval
+            call = await pre.read(fd=fd, count=50)
+            call.fail("EBADF")
+            got.append(await post.read(fd=fd))
+            await pre.close(fd=fd)
+
+        child = f"import os; fd = os.open({path!r}, os.O_RDONLY)\ntry:\n    os.read(fd, 50)\nexcept OSError:\n    pass"
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual(got[0].error, errno.EBADF)
+        self.assertTrue(got[0].failed)
+        self.assertEqual(got[0].data, b"")
+
+    def test_fail_is_visible_to_the_tracee(self):
+        # the tracee's own view: os.write raises OSError with the errno the
+        # scenario injected, and the child exits with it
+        async def scenario():
+            call = await pre.write(fd=1)
+            call.fail("ENOSPC")
+
+        child = "import os, sys\ntry:\n    os.write(1, b'x')\nexcept OSError as e:\n    sys.exit(e.errno)"
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(os.WEXITSTATUS(status), errno.ENOSPC)
+
+    def test_succeed_fakes_the_retval(self):
+        with tempfile.NamedTemporaryFile("wb", delete=False) as f:
+            f.write(b"w" * 30)
+            path = f.name
+        self.addCleanup(os.unlink, path)
+        got = []
+
+        async def scenario():
+            fd = None
+            while fd is None:
+                opened = await post.openat()
+                if opened.string("path") == path:
+                    fd = opened.retval
+            call = await pre.read(fd=fd, count=30)
+            call.succeed(30)  # the kernel never runs the read
+            got.append(await post.read(fd=fd))
+            await pre.close(fd=fd)
+
+        child = f"import os; fd = os.open({path!r}, os.O_RDONLY); os.read(fd, 30)"
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual(got[0].retval, 30)
+        self.assertTrue(got[0].succeeded)
+
+    def test_marker_survives_an_injected_failure(self):
+        # the injected call's exit stop reads -ENOSYS (the stub's answer),
+        # which collides with the entry marker; the next real call on the
+        # same thread must still classify and deliver correctly
+        with tempfile.NamedTemporaryFile("wb", delete=False) as f:
+            f.write(b"v" * 20)
+            path = f.name
+        self.addCleanup(os.unlink, path)
+        got = []
+
+        async def scenario():
+            fd = None
+            while fd is None:
+                opened = await post.openat()
+                if opened.string("path") == path:
+                    fd = opened.retval
+            call = await pre.read(fd=fd, count=10)
+            call.fail("EIO")
+            await post.read(fd=fd)
+            got.append(await post.read(fd=fd))  # the second read runs for real
+            await pre.close(fd=fd)
+
+        child = (
+            f"import os; fd = os.open({path!r}, os.O_RDONLY)\n"
+            "for _ in range(2):\n"
+            "    try:\n"
+            "        os.read(fd, 10)\n"
+            "    except OSError:\n"
+            "        pass"
+        )
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual(got[0].retval, 10)
+        self.assertEqual(got[0].data, b"v" * 10)
+
+    def test_fail_rejects_unknown_errno(self):
+        async def scenario():
+            call = await pre.write(fd=1)
+            call.fail("NOT_A_REAL_ERRNO")
+
+        with self.assertRaises(ValueError):
+            run(scenario, [sys.executable, "-c", "import os; os.write(1, b'x')"])
+
 
 class AnyOfTest(unittest.TestCase):
     def test_requires_matchers(self):

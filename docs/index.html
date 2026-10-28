@@ -143,7 +143,7 @@ secret = ptrace.peek(trap.tid, trap.regs.rdi, 32)  <span class="c"># scalars in 
 
 call = <span class="k">await</span> pre.read(fd=fd)
 call.overwrite(count=1)  <span class="c"># the kernel is asked for one byte</span></div>
-    <p><small style="color:var(--gray)">That is exactly how <span class="mono" style="color:var(--ink)">examples/ssh_decrypted.py</span> recovers an SSH session key and <span class="mono" style="color:var(--ink)">examples/byte_by_byte.py</span> slows a whole HTTP conversation to one byte per syscall. Next commits: fail(), succeed(), replace_with().</small></p>
+    <p><small style="color:var(--gray)">That is exactly how <span class="mono" style="color:var(--ink)">examples/ssh_decrypted.py</span> recovers an SSH session key and <span class="mono" style="color:var(--ink)">examples/byte_by_byte.py</span> slows a whole HTTP conversation to one byte per syscall. Entry rewriting ships: <span class="mono" style="color:var(--ink)">overwrite</span>, <span class="mono" style="color:var(--ink)">fail</span>, <span class="mono" style="color:var(--ink)">succeed</span>.</small></p>
   </div>
 
   <div class="cell wide">

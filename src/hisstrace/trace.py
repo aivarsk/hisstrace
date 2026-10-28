@@ -104,6 +104,7 @@ class Tracer:
         self._rejected = set()  # dropped children to detach at their initial stop
         self._breakpoints = {}  # addr -> original byte (int3 set)
         self._cleared = set()  # addr once cleared: late in-flight traps are swallowed
+        self._retval_override = {}  # tid -> value the in-flight syscall must return instead
 
         if attach_pid is None:
             self.pid = os.fork()
@@ -204,6 +205,16 @@ class Tracer:
 
     def _set_options(self, tid):
         ptrace.ptrace(ptrace.SETOPTIONS, tid, 0, self._OPTIONS)
+
+    def force_retval(self, tid, value):
+        """Make the syscall in flight at tid's entry stop return `value`
+        without running. The number register is set to -1, which the kernel
+        answers with -ENOSYS without doing anything, and `value` replaces the
+        return register at the exit stop. Call with tracees stopped."""
+        regs = self.arch.get(tid)
+        self.arch.set_number(regs, -1)
+        self.arch.set(tid, regs)
+        self._retval_override[tid] = value
 
     def _with_live_task(self, op):
         """Run op(tid) on each traced task until one succeeds. The leader may
@@ -318,6 +329,7 @@ class Tracer:
         self._undecided.discard(tid)
         self._child_stopped.discard(tid)
         self._rejected.discard(tid)
+        self._retval_override.pop(tid, None)
 
     def __iter__(self):
         return self
@@ -384,7 +396,16 @@ class Tracer:
                 self._tgids.setdefault(tid, self.pid)
             number = self.arch.number(regs)
             retval = self.arch.retval(regs)
-            if self.arch.machine == "x86_64":
+            if tid in self._retval_override:
+                # force_retval() sent this call to the -ENOSYS stub: the exit
+                # stop reads -ENOSYS too, which would collide with the entry
+                # marker, so the override both classifies the stop and sets
+                # the return value the tracee will see
+                at_entry = False
+                retval = self._retval_override.pop(tid)
+                self.arch.set_retval(regs, retval)
+                self.arch.set(tid, regs)
+            elif self.arch.machine == "x86_64":
                 # entry stops carry -ENOSYS in the return register; restarted
                 # syscalls re-report entry, so a plain toggle would desync
                 at_entry = retval == (1 << 64) - 38  # -ENOSYS

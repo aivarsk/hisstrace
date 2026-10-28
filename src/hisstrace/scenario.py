@@ -7,6 +7,7 @@ tracing continues pass-through until the tracee exits; a tracee exit ends the
 scenario silently.
 """
 
+import errno
 import importlib.util
 import inspect
 import os
@@ -98,6 +99,21 @@ class Call(_Match):
         arch.set(self.tid, regs)
         self.args = Args(names, raw)
         self._new_args = tuple(raw)
+
+    def fail(self, error):
+        """Make the call return -1 with `error` (an errno name like "ENOSPC"
+        or a number) as errno; the kernel never runs the call."""
+        if isinstance(error, str):
+            try:
+                error = getattr(errno, error)
+            except AttributeError:
+                raise ValueError(f"unknown errno: {error!r}") from None
+        tracer().force_retval(self.tid, (-error) % (1 << 64))
+
+    def succeed(self, retval=0):
+        """Skip the call and return `retval` as if it had succeeded; the
+        kernel never runs the call. With no argument, returns 0."""
+        tracer().force_retval(self.tid, retval)
 
     def __repr__(self):
         return f"Call({self.name}, {self.args!r})"

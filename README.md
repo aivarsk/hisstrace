@@ -30,10 +30,12 @@ pip install hisstrace
 - software breakpoints inside the tracee: `Tracer.set_breakpoint(addr)` arms
   an int3, the stop surfaces as a `Trap` event with live registers, and the
   original instruction is single-stepped and re-armed for you;
-- argument mutation at entry: on a pre-match, `call.overwrite(count=1)`
-  rewrites named argument registers before the kernel runs the call (names
-  come from the syscall table), and the matching post-match sees the new
-  values;
+- argument mutation and fault injection at entry: on a pre-match,
+  `call.overwrite(count=1)` rewrites named argument registers (names come
+  from the syscall table), `call.fail("ENOSPC")` makes the call return -1
+  with that errno, and `call.succeed(retval)` skips the call and returns a
+  fake success; the kernel never runs failed or succeeded calls, and the
+  matching post-match sees the faked result;
 - `hisstrace run CMD [ARGS...]`: a strace-style printer, built from the
   scenario API like everything else.
 
@@ -144,13 +146,13 @@ the fallback for anything missing, and are also usable as match filters, as
 
 ## Honest limits
 
-One scenario runs at a time, serially. Argument mutation at entry works via
-`call.overwrite()`, but there is no `call.fail()` or return-value replacement
-yet; the scenario can rewrite what a call asks for, not what the kernel
-answers with. No fd-lifetime tracking: `dup2` aliasing and fd reuse after
-close are invisible to plain `fd=` filters (scenarios track fds themselves,
-as `examples/byte_by_byte.py` does). Attaching to another user's process
-fails with the kernel's `ptrace_scope` error.
+One scenario runs at a time, serially. At entry a scenario can rewrite
+arguments (`overwrite`) and the outcome (`fail`, `succeed`), but it cannot
+swap one syscall for another, and an in-flight call cannot be cancelled, only
+steered. No fd-lifetime tracking: `dup2` aliasing and fd reuse after close
+are invisible to plain `fd=` filters (scenarios track fds themselves, as
+`examples/byte_by_byte.py` does). Attaching to another user's process fails
+with the kernel's `ptrace_scope` error.
 
 ## Develop
 
