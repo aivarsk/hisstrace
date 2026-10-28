@@ -147,7 +147,23 @@ call.overwrite(count=1)  <span class="c"># the kernel is asked for one byte</spa
   </div>
 
   <div class="cell wide">
-    <h2><span class="no">04</span>Small on purpose</h2>
+    <h2><span class="no">04</span>Examples included</h2>
+    <ul>
+      <li><span class="mono" style="color:var(--ink)">capture.py</span> - first steps: intercept one write, print its buffer.</li>
+      <li><span class="mono" style="color:var(--ink)">trackfd.py</span> - follow an fd from open to close, dump its traffic.</li>
+      <li><span class="mono" style="color:var(--ink)">httpforever.py</span> - print curl's entire HTTP conversation with httpforever.com.</li>
+      <li><span class="mono" style="color:var(--ink)">byte_by_byte.py</span> - <span class="mono" style="color:var(--ink)">overwrite()</span> every socket read and write to 1 byte; the whole page moves one byte per syscall.</li>
+      <li><span class="mono" style="color:var(--ink)">socket_audit.py</span> - linter for a classic event-loop bug: warn about any socket that lives its whole life blocking.</li>
+      <li><span class="mono" style="color:var(--ink)">nologin_audit.py</span> - is <span class="mono" style="color:var(--ink)">/usr/sbin/nologin</span> really nologin? Syscall whitelist, terminal/exec checks, fail-fast mode.</li>
+      <li><span class="mono" style="color:var(--ink)">watch_conn.py</span> - one SSH round of a Go client: socket traffic across its thread handoff, every getrandom.</li>
+      <li><span class="mono" style="color:var(--ink)">ssh_decrypted.py</span> - breakpoint inside the process, recover the X25519 secret from trap registers, decrypt the session.</li>
+      <li><span class="mono" style="color:var(--ink)">ssh_rng_via_syscall.py</span> - the same decryption with no symbols and no breakpoints: a one-byte patch forces getrandom onto the syscall path, the KEX scalar is picked out of the stream.</li>
+    </ul>
+    <p style="margin-top:14px"><small style="color:var(--gray)">The SSH set needs a Go client to watch; <span class="mono" style="color:var(--ink)">ssh_rng_via_syscall.py</span> also needs <span class="mono" style="color:var(--ink)">pip install cryptography</span>. Everything else runs against the usual suspects: curl, wget, python3, /usr/sbin/nologin.</small></p>
+  </div>
+
+  <div class="cell wide">
+    <h2><span class="no">05</span>Small on purpose</h2>
     <ul>
       <li>ptrace(2) through ctypes. No C build step, nothing to compile, nothing to pin. Syscall tables for x86-64 and AArch64, generated from kernel headers.</li>
       <li>Attach with <span class="mono" style="color:var(--ink)">hisstrace run -p PID</span>: every thread, clean detach, threads spawned after the attach are picked up.</li>

@@ -98,7 +98,7 @@ async def scenario():
             outgoing += data
         total = len(incoming) + len(outgoing)
         arrow = "<-" if done.name in INCOMING else "->"
-        print(f"{arrow} 1 byte (total {total})", flush=True)
+        print(f"{arrow} {data!r} (total {total})", flush=True)
 
     print(f"\nrequest, {len(outgoing)} bytes, one syscall per byte:")
     print(outgoing.decode("utf-8", "replace"))

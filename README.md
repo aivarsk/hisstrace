@@ -71,11 +71,23 @@ size argument of every socket read and write to 1 (`call.overwrite` for
 count-style calls, one poke inside the msghdr for `recvmsg`/`sendmsg`), so
 the kernel moves the whole conversation one byte per syscall, and it tracks
 happy-eyeballs connection churn, forked transfers, and fd reuse to do it.
+`examples/socket_audit.py` is a linter for the "no timeout set" class of bug
+(the one where a library does a blocking call and one slow peer stalls the
+event loop): it tracks every socket the app creates
+(`socket`/`accept4`/`socketpair`), the `fcntl(F_SETFL, O_NONBLOCK)` and
+`ioctl(FIONBIO)` calls that make one non-blocking (what
+`socket.setblocking(False)` and `os.set_blocking` emit), treats a connect
+that returns EINPROGRESS as proof of non-blocking, and warns at close time
+about any socket that lived its whole life blocking, naming the peer it was
+connected to.
+`examples/nologin_audit.py` is the same shape pointed at trust rather than
+performance: run `/usr/sbin/nologin` (or `/bin/false`) and it watches every
+syscall against a whitelist, lists every opened path, and calls out terminal
+access, execs, or off-whitelist syscalls, with a verdict at the end.
 `examples/watch_conn.py` traces a full SSH round of a Go client (socket
 traffic across its thread handoff plus every getrandom, ending when the
-connection closes); `examples/ssh_handshake.py` parses that same traffic into
-the SSH handshake (KEXINIT algorithm lists, negotiation, ECDH, NEWKEYS);
-`examples/ssh_decrypted.py` goes the last mile: it plants a breakpoint on
+connection closes); `examples/ssh_decrypted.py` goes the last mile: it plants
+a breakpoint on
 `crypto/ecdh.x25519ScalarMult` inside the process, recovers the X25519 shared
 secret from the trap's registers, derives the session keys, and decrypts the
 whole session in pure Python. `examples/ssh_rng_via_syscall.py` does the same
