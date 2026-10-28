@@ -3,6 +3,9 @@
 import ctypes
 import errno
 import os
+import sys
+
+BYTEORDER = sys.byteorder  # native ptrace traces the same-endian host
 
 libc = ctypes.CDLL(None, use_errno=True)
 _ptrace = libc.ptrace
@@ -116,7 +119,7 @@ def peek(pid, addr, size):
         value = _ptrace(PEEKDATA, pid, addr + len(out), 0)
         if value == -1 and ctypes.get_errno():
             break
-        out += (value & mask).to_bytes(word, "little")
+        out += (value & mask).to_bytes(word, BYTEORDER)
     return bytes(out[:size])
 
 
@@ -143,7 +146,7 @@ def poke(pid, addr, data):
     block[addr - first : addr - first + len(data)] = data
     for off in range(0, len(block), word):
         ctypes.set_errno(0)
-        chunk = int.from_bytes(block[off : off + word], "little")
+        chunk = int.from_bytes(block[off : off + word], BYTEORDER)
         if _ptrace(POKEDATA, pid, first + off, chunk) == -1:
             err = ctypes.get_errno()
             if err:

@@ -90,7 +90,7 @@
 
   <div class="cell">
     <h2><span class="no">02</span>How it works</h2>
-    <p>Write <span class="mono" style="color:var(--ink)">scenario.py</span> as an <span class="mono" style="color:var(--ink)">async def scenario()</span>. Run it against a command, or attach with <span class="mono" style="color:var(--ink)">-p PID</span>. While your Python runs between awaits, the matched tracee stays stopped; the next await resumes it. Unmatched syscalls pass through unchanged. This is <span class="mono" style="color:var(--ink)">examples/httpforever.py</span>, slightly trimmed:</p>
+    <p>Write <span class="mono" style="color:var(--ink)">scenario.py</span> as an <span class="mono" style="color:var(--ink)">async def scenario()</span>. Run it against a command, or attach with <span class="mono" style="color:var(--ink)">-p PID</span>. While your Python runs between awaits, the matched tracee stays stopped; the next await resumes it. Unmatched syscalls pass through unchanged. <span class="mono" style="color:var(--ink)">hisstrace run CMD</span> is the same machinery printing everything, the strace-style first look when you are still poking around; a scenario is for when you know what you are looking for. This is <span class="mono" style="color:var(--ink)">examples/httpforever.py</span>, slightly trimmed:</p>
     <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> any_of, post, pre, ptrace
 
 <span class="k">async def</span> scenario():
@@ -156,6 +156,7 @@ call.overwrite(count=1)  <span class="c"># the kernel is asked for one byte</spa
   <div class="cell wide">
     <h2><span class="no">04</span>Examples included</h2>
     <ul>
+      <li><span class="mono" style="color:var(--ink)">strace.py</span> - the <span class="mono" style="color:var(--ink)">hisstrace run</span> printer as a scenario: every syscall, named args, results, the strace-style exit line. Copy it and bend the formatting.</li>
       <li><span class="mono" style="color:var(--ink)">capture.py</span> - first steps: intercept one write, print its buffer.</li>
       <li><span class="mono" style="color:var(--ink)">trackfd.py</span> - follow an fd from open to close, dump its traffic.</li>
       <li><span class="mono" style="color:var(--ink)">httpforever.py</span> - print curl's entire HTTP conversation with httpforever.com.</li>

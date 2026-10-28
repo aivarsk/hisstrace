@@ -71,12 +71,10 @@ async def scenario():
             if done.error in (114, 115, 11):  # EALREADY, EINPROGRESS, EWOULDBLOCK
                 nonblocking.add(raw[0])
             else:
-                addr = ptrace.peek(done.tid, raw[1], 8)
-                port = int.from_bytes(addr[2:4], "big")
-                if int.from_bytes(addr[:2], "little") == 2:
-                    peer[raw[0]] = ".".join(str(b) for b in addr[4:8]) + f":{port}"
-                else:
-                    peer[raw[0]] = f"[v6]:{port}"
+                target = done.sockaddr("addr")
+                if target.address is not None:
+                    peer[raw[0]] = (f"{target.address}:{target.port}"
+                                    if target.port is not None else target.address)
         elif done.name == "fcntl" and done.succeeded and raw[1] == F_SETFL and raw[2] & O_NONBLOCK:
             nonblocking.add(raw[0])
         elif done.name == "ioctl" and raw[1] == FIONBIO and done.succeeded:

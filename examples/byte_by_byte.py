@@ -51,8 +51,7 @@ async def scenario():
         if event.name == "exit_group":
             break
         if event.name == "connect":
-            raw = ptrace.peek(event.tid, event.args.addr, 8)  # port is big-endian at bytes 2-4
-            if int.from_bytes(raw[2:4], "big") == 80:
+            if event.sockaddr("addr").port == 80:
                 live[(event.pid, event.args.fd)] = True
                 print(f"connected on pid {event.pid} fd {event.args.fd}; "
                       f"forcing every read and write to 1 byte", flush=True)
@@ -84,11 +83,11 @@ async def scenario():
             continue
         if done.name in INCOMING[:2] or done.name in ("write", "sendto"):
             data = done.data or b""  # these four are snapshotted by the API
-        else:  # msg/iovec calls: follow the (rewritten) descriptor chain
-            if done.name in ("recvmsg", "sendmsg"):
-                base = word(done.tid, word(done.tid, done.args.msg + 16))
-            else:
-                base = word(done.tid, done.args.vec)
+        elif done.name in ("recvmsg", "sendmsg"):  # follow the msghdr chain
+            base = word(done.tid, word(done.tid, done.args.msg + 16))
+            data = ptrace.peek(done.tid, base, done.retval)
+        else:  # readv/writev
+            base = done.iovec("vec", done.args.vlen)[0].base
             data = ptrace.peek(done.tid, base, done.retval)
         if not data:
             continue

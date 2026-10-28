@@ -70,11 +70,10 @@ async def scenario():
         elif call.name == "connect":
             # the only legitimate destination is the syslog socket; anything
             # else (a TCP connect from nologin?) is a problem by itself
-            addr = ptrace.peek(call.tid, call.args.addr, min(call.args.len, 128))
-            if int.from_bytes(addr[:2], "little") == 1:  # AF_UNIX
-                path = bytes(addr[2:]).split(b"\0")[0].decode("utf-8", "replace")
-                if path != "/dev/log":
-                    problem = f"connect to unix socket {path!r}"
+            target = call.sockaddr("addr")
+            if target.family == 1:
+                if target.address != "/dev/log":
+                    problem = f"connect to unix socket {target.address!r}"
             else:
                 problem = "connect to a non-unix socket"
         elif call.name not in WHITELIST:

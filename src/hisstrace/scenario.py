@@ -10,7 +10,10 @@ scenario silently.
 import errno
 import importlib.util
 import inspect
+import ipaddress
 import os
+import sys
+from collections import namedtuple
 from dataclasses import dataclass, field
 
 from . import ptrace
@@ -55,8 +58,23 @@ def _errno(retval):
     return -value if -4095 <= value <= -1 else None
 
 
+# Decoded sockaddr: address is the IP string for AF_INET/AF_INET6, the path
+# for AF_UNIX; port is None where it does not apply. The port is network byte
+# order (big, per spec); every other field is a native C integer, so the
+# decoders follow the host byte order, which native ptrace makes the tracee's.
+BYTEORDER = sys.byteorder
+Sockaddr = namedtuple("Sockaddr", "family address port")
+
+# Decoded timespec: two 64-bit words, seconds then nanoseconds (nanosleep and
+# clock_nanosleep requests, ppoll timeouts, utimensat stamps).
+Timespec = namedtuple("Timespec", "seconds nanoseconds")
+
+# One element of a readv/writev scatter-gather array.
+IOVec = namedtuple("IOVec", "base length")
+
+
 class _Match:
-    """Common ground for matches: identity, named args, tracee string reads."""
+    """Common ground for matches: identity, named args, decoded tracee reads."""
 
     def __init__(self, pid, name, args, tid):
         self.pid = pid
@@ -67,6 +85,38 @@ class _Match:
     def string(self, name):
         """Read a C string from the tracee at the named pointer argument."""
         return ptrace.peek_cstring(self.tid, getattr(self.args, name))
+
+    def sockaddr(self, name):
+        """Decode the sockaddr at the named pointer argument (connect, bind,
+        sendto, accept...). family is the AF_* number; address is a string."""
+        raw = ptrace.peek(self.tid, getattr(self.args, name), 128)
+        family = int.from_bytes(raw[:2], BYTEORDER)  # sa_family_t
+        if family == 1:  # AF_UNIX
+            path = bytes(raw[2:]).split(b"\0")[0].decode("utf-8", "replace")
+            return Sockaddr(family, path, None)
+        if family == 2 and len(raw) >= 8:  # AF_INET
+            return Sockaddr(family, str(ipaddress.ip_address(raw[4:8])), int.from_bytes(raw[2:4], "big"))
+        if family == 10 and len(raw) >= 28:  # AF_INET6
+            return Sockaddr(family, str(ipaddress.ip_address(raw[8:24])), int.from_bytes(raw[2:4], "big"))
+        return Sockaddr(family, None, None)
+
+    def timespec(self, name):
+        """Decode the timespec at the named pointer argument (rqtp/utimes/
+        timeout args of nanosleep, clock_nanosleep, ppoll, utimensat)."""
+        raw = ptrace.peek(self.tid, getattr(self.args, name), 16)
+        return Timespec(
+            int.from_bytes(raw[:8], BYTEORDER, signed=True), int.from_bytes(raw[8:], BYTEORDER, signed=True)
+        )
+
+    def iovec(self, name, count):
+        """Decode an iovec array at the named pointer argument (the vec of
+        readv/writev, with vlen passed in). Returns a list of IOVec."""
+        count = max(0, min(count, 1024))  # cap the peek against garbage counts
+        raw = ptrace.peek(self.tid, getattr(self.args, name), 16 * count)
+        return [
+            IOVec(int.from_bytes(raw[i : i + 8], BYTEORDER), int.from_bytes(raw[i + 8 : i + 16], BYTEORDER))
+            for i in range(0, len(raw), 16)
+        ]
 
 
 class Call(_Match):

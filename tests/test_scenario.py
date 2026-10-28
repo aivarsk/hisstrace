@@ -300,6 +300,72 @@ class ScenarioRunTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             run(scenario, [sys.executable, "-c", "import os; os.write(1, b'x')"])
 
+    def test_sockaddr_decodes_ipv4(self):
+        got = []
+
+        async def scenario():
+            call = await pre.connect()
+            got.append(call.sockaddr("addr"))
+
+        child = (
+            "import socket; s = socket.socket()\ntry:\n    s.connect(('127.0.0.1', 43210))\nexcept OSError:\n    pass"
+        )
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual(got[0].family, 2)  # AF_INET
+        self.assertEqual(got[0].address, "127.0.0.1")
+        self.assertEqual(got[0].port, 43210)
+
+    def test_sockaddr_decodes_unix(self):
+        got = []
+
+        async def scenario():
+            call = await pre.connect()
+            got.append(call.sockaddr("addr"))
+
+        child = (
+            "import socket; s = socket.socket(socket.AF_UNIX)\n"
+            "try:\n"
+            "    s.connect('/tmp/hisstrace-audit.sock')\n"
+            "except OSError:\n"
+            "    pass"
+        )
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual(got[0].family, 1)  # AF_UNIX
+        self.assertEqual(got[0].address, "/tmp/hisstrace-audit.sock")
+        self.assertIsNone(got[0].port)
+
+    def test_timespec_decodes_nanosleep(self):
+        got = []
+
+        async def scenario():
+            call = await any_of(pre.nanosleep(), pre.clock_nanosleep())
+            got.append(call.timespec("rqtp"))
+
+        child = (
+            "import ctypes\n"
+            "req = (ctypes.c_long * 2)(0, 200000000)\n"
+            "ctypes.CDLL(None, use_errno=True).nanosleep(req, None)"
+        )
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual(got[0].seconds, 0)
+        self.assertEqual(got[0].nanoseconds, 200_000_000)
+
+    def test_iovec_decodes_writev(self):
+        got = []
+
+        async def scenario():
+            call = await pre.writev(fd=1)
+            got.append(call.iovec("vec", call.args.vlen))
+
+        child = "import os; os.writev(1, [b'ab', b'cde'])"
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual([part.length for part in got[0]], [2, 3])
+        self.assertTrue(all(part.base for part in got[0]))
+
 
 class AnyOfTest(unittest.TestCase):
     def test_requires_matchers(self):

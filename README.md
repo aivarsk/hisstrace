@@ -63,6 +63,14 @@ Run it against a command:
 hisstrace scenario examples/capture.py -- python3 -c "..."
 ```
 
+If all you want is strace, `hisstrace run CMD` is the familiar first look:
+every syscall, named arguments, results, errno names. It is built from the
+same scenario API. Reach for a scenario when you know what you are looking
+for: watch one fd, one path, one connection; rewrite arguments with
+`overwrite`; fail or fake results with `fail`/`succeed`; plant a breakpoint
+inside the process. `examples/strace.py` is the `run` printer written out
+as a scenario, ready to bend.
+
 `examples/httpforever.py` prints curl's entire HTTP conversation with
 httpforever.com, request bytes marked `->` and response bytes `<-`, by
 finding the TCP socket on port 80 and watching `sendto`/`recvfrom` on it.
@@ -125,7 +133,9 @@ See `examples/trackfd.py` for the full fd-tracking loop. `pre.any()` and
 `post.any()` watch every syscall in that phase, which is all `hisstrace run`
 is: a strace built from the scenario API, with argument names for every
 syscall (generated from kernel prototypes) and C-string reads for pointer
-arguments:
+arguments. `examples/strace.py` is that printer written out as a scenario,
+exit_group's strace-style `= ?` line included, ready to bend to your own
+formatting:
 
 ```python
 while True:
