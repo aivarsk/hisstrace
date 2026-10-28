@@ -82,8 +82,9 @@ about any socket that lived its whole life blocking, naming the peer it was
 connected to.
 `examples/nologin_audit.py` is the same shape pointed at trust rather than
 performance: run `/usr/sbin/nologin` (or `/bin/false`) and it watches every
-syscall against a whitelist, lists every opened path, and calls out terminal
-access, execs, or off-whitelist syscalls, with a verdict at the end.
+syscall entry against a whitelist before the kernel runs it, lists every
+opened path, and calls out terminal access, execs, unexpected connects, or
+off-whitelist syscalls, with a verdict at the end.
 `examples/watch_conn.py` traces a full SSH round of a Go client (socket
 traffic across its thread handoff plus every getrandom, ending when the
 connection closes); `examples/ssh_decrypted.py` goes the last mile: it plants
