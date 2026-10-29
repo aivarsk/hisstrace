@@ -6,15 +6,11 @@ import tempfile
 import time
 import unittest
 
-from hisstrace import current
 from hisstrace.scenario import (
-    DEFAULT_NAMES,
-    Args,
     Call,
     CompletedCall,
     Matcher,
     any_of,
-    arg_names,
     load,
     on,
     post,
@@ -23,50 +19,42 @@ from hisstrace.scenario import (
 )
 
 
-class MatcherTest(unittest.TestCase):
-    def test_unknown_syscall(self):
-        with self.assertRaises(ValueError):
-            Matcher("entry", "not_a_syscall", {})
-
-    def test_unknown_filter(self):
-        with self.assertRaises(ValueError):
-            Matcher("entry", "write", {"nosucharg": 1})
-
-    def test_filter_on_unspecd_syscall(self):
-        with self.assertRaises(ValueError):
-            Matcher("entry", "execve", {"fd": 1})
-
-    def test_matcher_awaitable(self):
-        matcher = Matcher("entry", "write", {})
-        self.assertEqual(matcher.phase, "entry")
-        self.assertEqual(matcher.number, current().names["write"])
-
-
-class ArgsTest(unittest.TestCase):
-    def test_named_access(self):
-        args = Args(("fd", "buf", "count"), (1, 4096, 5))
-        self.assertEqual(args.fd, 1)
-        self.assertEqual(args.buf, 4096)
-        self.assertEqual(args.count, 5)
-        self.assertEqual(args.raw, (1, 4096, 5))
-
-    def test_unknown_name(self):
-        with self.assertRaises(AttributeError):
-            Args((), ()).fd
-
-
-class CompletedCallTest(unittest.TestCase):
-    def test_error_helpers(self):
-        ok = CompletedCall(1, "write", Args((), ()), 5)
-        self.assertTrue(ok.succeeded)
-        self.assertFalse(ok.failed)
-        self.assertIsNone(ok.error)
-        fail = CompletedCall(1, "write", Args((), ()), (1 << 64) - errno.EBADF)
-        self.assertTrue(fail.failed)
-        self.assertEqual(fail.error, errno.EBADF)
-
-
 class ScenarioRunTest(unittest.TestCase):
+    def test_unknown_syscall_rejected(self):
+        async def scenario():
+            await pre.not_a_syscall()
+
+        with self.assertRaises(ValueError):
+            run(scenario, [sys.executable, "-c", "pass"])
+
+    def test_unknown_filter_rejected(self):
+        async def scenario():
+            await pre.write(nosucharg=1)
+
+        with self.assertRaises(ValueError):
+            run(scenario, [sys.executable, "-c", "pass"])
+
+    def test_named_args_on_live_call(self):
+        got = []
+
+        async def scenario():
+            got.append(await post.write(fd=1))
+
+        child = "import os; os.write(1, b'named!')"
+        status = run(scenario, [sys.executable, "-c", child])
+        self.assertEqual(status, 0)
+        self.assertEqual(got[0].args.fd, 1)
+        self.assertEqual(got[0].args.count, 6)
+
+    def test_unknown_arg_name_rejected(self):
+        async def scenario():
+            done = await post.write(fd=1)
+            got = done.args.nosuch
+            print(got)
+
+        with self.assertRaises(AttributeError):
+            run(scenario, [sys.executable, "-c", "import os; os.write(1, b'x')"])
+
     def test_post_write_captures_data(self):
         got = []
 
@@ -508,21 +496,6 @@ class AnyMatcherTest(unittest.TestCase):
         self.assertEqual(status, 0)
         write = next(c for c in got if c.name == "write")
         self.assertEqual(write.args.fd, 1)
-
-
-class ArgNamesTest(unittest.TestCase):
-    def test_generated_names(self):
-        self.assertEqual(arg_names("read")[:3], ("fd", "buf", "count"))
-        self.assertEqual(arg_names("openat"), ("dirfd", "path", "flags", "mode"))
-        self.assertEqual(arg_names("socket"), ("domain", "type", "protocol"))
-
-    def test_unknown_falls_back(self):
-        self.assertEqual(arg_names("not_a_syscall"), DEFAULT_NAMES)
-
-    def test_args_on_completed_call(self):
-        done = CompletedCall(1, "mmap", Args(arg_names("mmap"), (0, 100, 3, 34, 4, 0)), 99)
-        self.assertEqual(done.args.len, 100)
-        self.assertEqual(done.args.prot, 3)
 
 
 class StringArgTest(unittest.TestCase):

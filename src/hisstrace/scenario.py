@@ -406,10 +406,15 @@ def run(scenario, argv=None, pid=None):
 
 
 def load(path):
-    """Load a scenario module from a .py file; it must define scenario()."""
+    """Load a scenario module from a .py file; it must define scenario().
+    The file's directory goes on sys.path so scenarios can share helper
+    modules next to them."""
     spec = importlib.util.spec_from_file_location("hisstrace_scenario", path)
     if spec is None or spec.loader is None:
         raise ValueError(f"cannot load scenario: {path}")
+    directory = os.path.dirname(os.path.abspath(path))
+    if directory not in sys.path:
+        sys.path.insert(0, directory)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     scenario = getattr(module, "scenario", None)

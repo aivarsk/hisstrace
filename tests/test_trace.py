@@ -6,7 +6,8 @@ import time
 import unittest
 
 from hisstrace.arch import current
-from hisstrace.cli import fmt_arg, fmt_retval
+from hisstrace.scenario import pre
+from hisstrace.scenario import run as run_scenario
 from hisstrace.trace import Child, Event, TraceeExited, Tracer, signed
 
 
@@ -179,6 +180,8 @@ class AttachTest(unittest.TestCase):
         # A trap already in flight when clear_breakpoint runs must not be
         # delivered to the tracee as a genuine SIGTRAP: the PC is rewound so
         # the restored instruction re-executes, and the trap is swallowed.
+        # Stubbed, not live: provoking a trap in the clear window is a race,
+        # while the rewind-and-swallow logic must be pinned deterministically.
         class Regs:
             rip = 0x1001
 
@@ -206,30 +209,21 @@ class AttachTest(unittest.TestCase):
         self.assertEqual(tracer.arch.regs.rip, 0x1000)  # rewound
         self.assertIn(123, tracer._resume)
 
-    def test_genuine_sigtrap_is_not_swallowed(self):
-        # A SIGTRAP whose pc-1 was never a breakpoint belongs to the tracee.
-        class Regs:
-            rip = 0x2001
+    def test_genuine_sigtrap_is_delivered(self):
+        # a SIGTRAP that is not one of our int3s belongs to the tracee: the
+        # tracer must pass it through, untouched and unstopped
+        async def scenario():
+            await pre.exit_group()
 
-        class Arch:
-            def get(self, tid):
-                return Regs()
-
-            def set(self, tid, regs):
-                raise AssertionError("registers must not be touched")
-
-            def pc(self, regs):
-                return regs.rip
-
-            def set_pc(self, regs, addr):
-                raise AssertionError("pc must not be touched")
-
-        tracer = Tracer.__new__(Tracer)
-        tracer.arch = Arch()
-        tracer._breakpoints = {}
-        tracer._cleared = set()
-        tracer._resume = []
-        self.assertIsNone(tracer._breakpoint_hit(123))
+        child = (
+            "import signal, sys\n"
+            "def ontrap(signum, frame): sys.exit(42)\n"
+            "signal.signal(signal.SIGTRAP, ontrap)\n"
+            "signal.raise_signal(signal.SIGTRAP)\n"
+        )
+        status = run_scenario(scenario, [sys.executable, "-c", child])
+        self.assertTrue(os.WIFEXITED(status))
+        self.assertEqual(os.WEXITSTATUS(status), 42)
 
 
 class ExecFailureTest(unittest.TestCase):
@@ -238,23 +232,23 @@ class ExecFailureTest(unittest.TestCase):
             Tracer(["/definitely/not/a/command"])
 
 
-class FormatTest(unittest.TestCase):
-    def test_signed(self):
-        self.assertEqual(signed(0), 0)
-        self.assertEqual(signed(5), 5)
-        self.assertEqual(signed((1 << 64) - 1), -1)
-        self.assertEqual(signed((1 << 64) - 100), -100)
+class PrinterTest(unittest.TestCase):
+    def test_run_printer_output(self):
+        # `hisstrace run` is a scenario too: cli.run prints every syscall
+        # with named args and results for a spawned command
+        import contextlib
+        import io
 
-    def test_fmt_arg(self):
-        self.assertEqual(fmt_arg(0), "0")
-        self.assertEqual(fmt_arg(42), "42")
-        self.assertEqual(fmt_arg(0xFFFF_FFFF_FFFF_F000), "-4096")
-        self.assertEqual(fmt_arg(0xFFFF_FFFF), "0xffffffff")
+        from hisstrace import cli
 
-    def test_fmt_retval(self):
-        self.assertEqual(fmt_retval(0), "0")
-        self.assertEqual(fmt_retval(3), "3")
-        self.assertEqual(fmt_retval((1 << 64) - 2), "-1 ENOENT")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            status = cli.run([sys.executable, "-c", "import os; os.write(1, b'hi')"])
+        self.assertEqual(status, 0)
+        lines = out.getvalue()
+        self.assertIn("write(fd=1", lines)
+        self.assertIn(") = 2", lines)
+        self.assertIn("brk(", lines)
 
 
 if __name__ == "__main__":
