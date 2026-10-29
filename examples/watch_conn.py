@@ -19,10 +19,8 @@ DATA_CAP = 48
 
 
 def connects_to(call, host):
-    if call.args.len < 8:  # unix sockets and DNS are someone else's business
-        return False
-    raw = ptrace.peek(call.tid, call.args.addr, 8)  # sockaddr_in: family, port, addr
-    return int.from_bytes(raw[:2], "little") == 2 and raw[4:8] == host.packed
+    # unix sockets and DNS are someone else's business
+    return call.sockaddr("addr").address == str(host)
 
 
 def show_random(done):

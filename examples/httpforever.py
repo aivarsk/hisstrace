@@ -8,7 +8,6 @@ byte arriving (<-) until the connection closes.
 """
 
 from hisstrace import any_of, post, pre
-from hisstrace import ptrace
 
 PORT = 80
 
@@ -16,10 +15,8 @@ PORT = 80
 async def find_http_socket():
     while True:  # curl probes unix sockets and DNS first, and may retry addresses
         call = await pre.connect()
-        raw = ptrace.peek(call.tid, call.args.addr, 4)  # sockaddr: family native, port big
-        family = int.from_bytes(raw[:2], "little")
-        port = int.from_bytes(raw[2:4], "big")
-        if port == PORT and family in (2, 10):  # TCP or TCP6
+        target = call.sockaddr("addr")
+        if target.port == PORT and target.family in (2, 10):  # TCP or TCP6
             return call.args.fd
 
 

@@ -308,9 +308,7 @@ async def scenario():
                 reads.append((seq, ptrace.peek(event.tid, event.args.buf, event.retval)))
             continue
         if event.name == "connect":
-            if event.args.len >= 8:
-                raw = ptrace.peek(event.tid, event.args.addr, 8)
-                if int.from_bytes(raw[:2], "little") == 2 and raw[4:8] == HOST.packed:
+            if event.sockaddr("addr").address == str(HOST):
                     fd = event.args.fd
                     print(f"connected to {HOST} on fd {fd}")
             continue

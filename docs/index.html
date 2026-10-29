@@ -93,12 +93,11 @@
   <div class="cell">
     <h2><span class="no">02</span>How it works</h2>
     <p>Write <span class="mono" style="color:var(--ink)">scenario.py</span> as an <span class="mono" style="color:var(--ink)">async def scenario()</span>. Run it against a command, or attach with <span class="mono" style="color:var(--ink)">-p PID</span>. While your Python runs between awaits, the matched tracee stays stopped; the next await resumes it. Unmatched syscalls pass through unchanged. <span class="mono" style="color:var(--ink)">hisstrace run CMD</span> is the same machinery printing everything, the strace-style first look when you are still poking around; a scenario is for when you know what you are looking for. This is <a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/httpforever.py">examples/httpforever.py</a>, slightly trimmed:</p>
-    <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> any_of, post, pre, ptrace
+    <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> any_of, post, pre
 
 <span class="k">async def</span> scenario():
     call = <span class="k">await</span> pre.connect()        <span class="c"># curl probes unix sockets first</span>
-    raw = ptrace.peek(call.tid, call.args.addr, 4)  <span class="c"># sockaddr: port is big-endian</span>
-    <span class="k">if</span> int.from_bytes(raw[2:4], <span class="c">"big"</span>) != 80:
+    <span class="k">if</span> call.sockaddr(<span class="c">"addr"</span>).port != 80:
         <span class="k">return</span>                   <span class="c"># not the HTTP connection</span>
     fd = call.args.fd
 

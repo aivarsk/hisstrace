@@ -454,10 +454,7 @@ def derive(client, server, k_shared):
 
 
 def connects_to(call, host):
-    if call.args.len < 8:
-        return False
-    raw = ptrace.peek(call.tid, call.args.addr, 8)
-    return int.from_bytes(raw[:2], "little") == 2 and raw[4:8] == host.packed
+    return call.sockaddr("addr").address == str(host)
 
 
 # ---------------------------------------------------------------- scenario
