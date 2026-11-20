@@ -156,6 +156,16 @@ Server: cloudflare
             <span class="k">break</span>
         <span class="k">print</span>(event.name, event.data)</div>
     <p style="max-width:60em">Matchers take argument filters; <span class="mono" style="color:var(--ink)">any_of</span> resumes on whichever comes first. Threads are always traced; child processes opt in through <span class="mono" style="color:var(--ink)">await on.fork()</span> and <span class="mono" style="color:var(--ink)">child.follow()</span>. And the fangs: software breakpoints with live registers, memory reads, and argument mutation at entry.</p>
+    <p style="max-width:60em">Filters compare with a double-suffix when exact is not enough: <span class="mono" style="color:var(--ink)">msgsz__gt</span>, <span class="mono" style="color:var(--ink)">count__le</span>, <span class="mono" style="color:var(--ink)">flags__ne</span>. <span class="mono" style="color:var(--ink)">path__contains</span> matches the text of a pointer argument read from the tracee; <span class="mono" style="color:var(--ink)">flags__bits</span> requires flag bits to be all set, the O_CREAT|O_EXCL idiom. Chaining awaits in the order the calls should happen is an assertion about the shape of a conversation:</p>
+    <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">async def</span> scenario():
+    big = <span class="k">await</span> post.msgsnd(msgsz__gt=4000)
+    <span class="k">assert</span> big.failed            <span class="c"># the queue refuses it</span>
+    spill = <span class="k">await</span> post.openat(path__contains=<span class="c">"/tmp/"</span>,
+                                    flags__bits=0xC0)  <span class="c"># so it spills</span>
+    <span class="k">await</span> post.write(count__ge=200000)
+    sent = <span class="k">await</span> post.msgsnd(msgsz__lt=100)  <span class="c"># only the name rides the queue</span>
+    <span class="k">assert</span> sent.succeeded</div>
+    <p style="max-width:60em">When the tracee exits, <span class="mono" style="color:var(--ink)">exit_group</span> has no completion stop to deliver: <span class="mono" style="color:var(--ink)">run()</span> throws <span class="mono" style="color:var(--ink)">TraceeExited(pid,&nbsp;status)</span> into a still-awaiting scenario instead of closing it, so gather-until-the-end scenarios can flush and report; awaiting again after catching it is a dead end.</p>
     <div class="code"><button class="copy" style="top:12px;right:12px;">c</button><span class="k">from</span> hisstrace <span class="k">import</span> ptrace, tracer
 
 t = tracer()
@@ -179,6 +189,7 @@ call.overwrite(count=1)  <span class="c"># the kernel is asked for one byte</spa
       <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/httpforever.py">httpforever.py</a> - print curl's entire HTTP conversation with httpforever.com.</li>
       <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/byte_by_byte.py">byte_by_byte.py</a> - <span class="mono" style="color:var(--ink)">overwrite()</span> every socket read and write to 1 byte; the whole page moves one byte per syscall.</li>
       <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/socket_audit.py">socket_audit.py</a> - linter for a classic event-loop bug: warn about any socket that lives its whole life blocking.</li>
+      <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/chain_assert.py">chain_assert.py</a> - ordered awaits as assertions: a failing big send, a spill file in /tmp, a giant write, a tiny queue message. Filter operators <span class="mono" style="color:var(--ink)">__gt</span>, <span class="mono" style="color:var(--ink)">__contains</span>, <span class="mono" style="color:var(--ink)">__bits</span>.</li>
       <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/nologin_audit.py">nologin_audit.py</a> - is <span class="mono" style="color:var(--ink)">/usr/sbin/nologin</span> really nologin? Syscall whitelist, terminal/exec checks, fail-fast mode.</li>
       <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/watch_conn.py">watch_conn.py</a> - one SSH round of a Go client: socket traffic across its thread handoff, every getrandom.</li>
       <li><a class="code-link mono" href="https://github.com/aivarsk/hisstrace/blob/main/examples/ssh_decrypted.py">ssh_decrypted.py</a> - breakpoint inside the process, recover the X25519 secret from trap registers, decrypt the session.</li>
