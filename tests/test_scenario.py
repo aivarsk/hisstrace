@@ -556,3 +556,82 @@ class LoadTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MatcherOpsTest(unittest.TestCase):
+    """Double-suffix comparisons: post.msgsnd(msgsz__gt=4000)."""
+
+    def _event(self, args):
+        ev = CompletedCall(os.getpid(), "msgsnd", _Args(args), 0)
+        ev.number = 69  # msgsnd on x86-64
+        return ev
+
+    def test_numeric_comparisons(self):
+        m = Matcher("exit", "msgsnd", {"msgsz__gt": 4000})
+        self.assertTrue(m.matches(self._event([1, 0, 5000, 0])))
+        self.assertFalse(m.matches(self._event([1, 0, 4000, 0])))
+        self.assertFalse(m.matches(self._event([1, 0, 1, 0])))
+
+        m = Matcher("exit", "msgsnd", {"msgsz__le": 100, "msgflg__ne": 2048})
+        self.assertTrue(m.matches(self._event([1, 0, 40, 0])))
+        self.assertFalse(m.matches(self._event([1, 0, 101, 0])))
+        self.assertFalse(m.matches(self._event([1, 0, 40, 2048])))
+
+    def test_bits_requires_all_bits(self):
+        m = Matcher("exit", "msgsnd", {"msgflg__bits": 0x40 | 0x80})
+        self.assertTrue(m.matches(self._event([1, 0, 40, 0xC2])))
+        self.assertFalse(m.matches(self._event([1, 0, 40, 0x40])))
+        self.assertFalse(m.matches(self._event([1, 0, 40, 0])))
+
+    def test_eq_without_suffix_still_works(self):
+        m = Matcher("exit", "msgsnd", {"msgflg": 0})
+        self.assertTrue(m.matches(self._event([1, 0, 5, 0])))
+        self.assertFalse(m.matches(self._event([1, 0, 5, 1])))
+
+    def test_bad_suffix_arg_rejected(self):
+        with self.assertRaises(ValueError):
+            Matcher("exit", "msgsnd", {"nosuch__gt": 1})
+
+    def test_bad_op_kept_as_arg_name(self):
+        # an unknown suffix is part of the argument name, so it must
+        # still raise the unknown-argument error
+        with self.assertRaises(ValueError):
+            Matcher("exit", "msgsnd", {"msgsz__banana": 1})
+
+
+class _Args(list):
+    pass
+
+
+class TraceeExitedTest(unittest.TestCase):
+    def test_cleanup_runs_at_trace_end(self):
+        # a gather-until-the-end scenario used to die with GeneratorExit
+        # the moment the tracee exited; now it gets TraceeExited
+        from hisstrace.scenario import TraceeExited
+
+        collected = []
+
+        async def scenario():
+            try:
+                while True:
+                    ev = await post.any()
+                    collected.append(ev.name)
+            except TraceeExited:
+                collected.append("exited-cleanly")
+
+        run(scenario, [sys.executable, "-c", "pass"])
+        self.assertIn("exited-cleanly", collected)
+        self.assertNotIn("exit_group", collected)  # never delivered, by design
+
+    def test_await_after_tracee_exited_is_closed(self):
+        # awaiting again after TraceeExited is a dead end: run() closes
+        # the coroutine instead of suspending forever
+        from hisstrace.scenario import TraceeExited
+
+        async def scenario():
+            try:
+                await post.any()
+            except TraceeExited:
+                await post.any()  # nothing left to resume this
+
+        run(scenario, [sys.executable, "-c", "pass"])  # must not hang

@@ -17,6 +17,7 @@ from collections import namedtuple
 from dataclasses import dataclass, field
 
 from . import ptrace
+from .trace import TraceeExited
 from .arch import current
 from .table import ARGS as ARG_NAMES
 from .trace import Child, Event, Tracer, Trap, signed
@@ -194,9 +195,20 @@ class CompletedCall(_Match):
         return f"CompletedCall({self.name}, retval={self.retval})"
 
 
+_OPS = {"eq", "ne", "gt", "ge", "lt", "le", "contains", "bits"}
+
+
 @dataclass(eq=False)
 class Matcher:
-    """An awaited syscall match; resumes the scenario with its result."""
+    """An awaited syscall match; resumes the scenario with its result.
+
+    Filters name an argument and a value: post.write(count=1). A
+    double-suffix selects a comparison: post.msgsnd(msgsz__gt=4000),
+    post.openat(path__contains="/tmp/"), post.openat(flags__bits=0x40)
+    to require flag bits. "contains" reads the tracee's C string at a
+    pointer argument and matches on its text; the numeric comparisons
+    work on raw argument values.
+    """
 
     phase: str  # "entry" for pre, "exit" for post, "child" for on.fork()
     name: str
@@ -222,15 +234,51 @@ class Matcher:
             raise ValueError(f"unknown syscall for {arch.machine}: {self.name}")
         self.number = arch.names[self.name]
         names = arg_names(self.name)
-        for key in self.filters:
-            if key not in names:
-                raise ValueError(f"{self.name}() has no argument {key!r}")
-        self._checks = tuple((names.index(key), value) for key, value in self.filters.items())
+        checks = []
+        for key, value in self.filters.items():
+            op = "eq"
+            arg = key
+            if "__" in key:
+                base, suffix = key.rsplit("__", 1)
+                if suffix in _OPS:
+                    arg, op = base, suffix
+            if arg not in names:
+                raise ValueError(f"{self.name}() has no argument {arg!r}")
+            checks.append((names.index(arg), op, value))
+        self._checks = tuple(checks)
 
     def matches(self, event):
         if self.name == "any":
             return True
-        return event.number == self.number and all(event.args[i] == v for i, v in self._checks)
+        if event.number != self.number:
+            return False
+        for i, op, want in self._checks:
+            got = event.args[i]
+            if op == "eq":
+                if got != want:
+                    return False
+            elif op == "ne":
+                if got == want:
+                    return False
+            elif op == "gt":
+                if not got > want:
+                    return False
+            elif op == "ge":
+                if not got >= want:
+                    return False
+            elif op == "lt":
+                if not got < want:
+                    return False
+            elif op == "le":
+                if not got <= want:
+                    return False
+            elif op == "bits":
+                if got & want != want:
+                    return False
+            elif op == "contains":
+                if want not in ptrace.peek_cstring(event.tid, got):
+                    return False
+        return True
 
     def __await__(self):
         result = yield self
@@ -299,6 +347,20 @@ def _resume(coro, value):
         return coro.send(value)
     except StopIteration:
         return None
+
+
+def _finish(coro, tracer):
+    """End-of-trace handshake: give a still-suspended scenario its
+    cleanup chance, then close it if it kept awaiting. Throws the
+    trace's own TraceeExited (pid, status) - the same condition the
+    tracer raises when the exec dies on the launch pad - so scenarios
+    see one exception type for "the tracee is gone"."""
+    try:
+        awaiting = coro.throw(TraceeExited(tracer.pid, tracer.exit_status))
+    except (StopIteration, TraceeExited):
+        return
+    if awaiting is not None:
+        coro.close()  # it awaited again after TraceeExited: documented dead end
 
 
 def _dispatch(branches, event, pending):
@@ -391,6 +453,8 @@ def run(scenario, argv=None, pid=None):
                     tracer.follow_child(result.pid)
                 else:
                     tracer.drop_child(result.pid)
+        if matcher is not None:
+            _finish(coro, tracer)  # tracee gone mid-await: cleanup, not a bare close
         _active_tracer = None
     if pid is not None:
         return 0  # attached processes are not ours to reap or grade

@@ -129,6 +129,24 @@ while True:
     print(event.name, event.data)
 ```
 
+Matchers take named filters, with comparison operators as a
+double-suffix: `post.msgsnd(msgsz__gt=4000)`, `post.write(count__le=128)`,
+`post.msgrcv(msgflg__ne=2048)`. `__contains` matches on the text of a
+pointer argument, read from the tracee (`post.openat(path__contains="/tmp/")`),
+and `__bits` requires flag bits to be all set
+(`post.openat(flags__bits=0xC0)` for O_CREAT|O_EXCL). Operators: `eq`
+(default, no suffix), `ne`, `gt`, `ge`, `lt`, `le`, `contains`, `bits`.
+Chaining awaits in the order the calls should happen is the usual shape of
+an assertion: `await post.msgsnd(msgsz__gt=4000)` first, then
+`await post.openat(path__contains="/tmp/")`, and so on.
+
+End of trace: `exit_group` has no completion stop, so the tracer simply
+runs out of events when the tracee dies. `run()` then throws
+`TraceeExited` into a still-awaiting scenario, so gather-until-the-end
+scenarios can flush and report in a `finally`; awaiting again after
+catching it is a dead end and the coroutine is closed. A scenario that
+returns on its own never sees it.
+
 See `examples/trackfd.py` for the full fd-tracking loop. `pre.any()` and
 `post.any()` watch every syscall in that phase, which is all `hisstrace run`
 is: a strace built from the scenario API, with argument names for every
